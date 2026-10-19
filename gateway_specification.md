@@ -1,31 +1,31 @@
-# LLM API Gateway — Complete Engineering Specification & Implementation Manual
+# 🏛️ LLM API Gateway — Complete Engineering Specification & Implementation Manual
 
-**Document Type:** Production Architecture (HLD/LLD), Repository Layout, Collaborative Division & Delivery Guide
-**Project Level:** Level 4 — API Design, Protocols & Distributed Communication
-**Target Audience:** Engineer 1 & Engineer 2 (Collaborative Pair Programming Team)
-**Target Stack:** Java 21, Spring Boot 3.3.x, Spring WebFlux, Spring Security 6, Spring for GraphQL, gRPC Java (Protobuf 3), PostgreSQL 16, Redis 7, Docker Compose
+> **Document Type:** Production Architecture (HLD/LLD), Repository Layout, Collaborative Division & Delivery Guide  
+> **Project Level:** Level 4 — API Design, Protocols & Distributed Communication  
+> **Target Audience:** Engineer 1 & Engineer 2 (Collaborative Pair Programming Team)  
+> **Target Stack:** Java 21, Spring Boot 3.3.x, Spring WebFlux, Spring Security 6, Spring for GraphQL, gRPC Java (Protobuf 3), PostgreSQL 16, Redis 7, Docker Compose
 
 ---
 
 ## 📑 Table of Contents
 
-1. **Executive Summary & Problem Statement**
-2. **High-Level Architecture (HLD)**
-3. **Component Architecture & Protocol Boundaries**
-4. **Monorepo & Multi-Module Project Structure**
-5. **Git Workflow, Branching & Commit Standards**
-6. **Low-Level Design (LLD) & Technical Specifications**
-   * 6.1 Protocol Buffers & gRPC Schema
-   * 6.2 Relational Database Schema (PostgreSQL)
-   * 6.3 Redis Key Layout & Atomic Lua Rate Limiter
-   * 6.4 Stateless JWT Security Pipeline
-   * 6.5 REST API, Error Envelopes & Versioning Engine
-   * 6.6 Reactive WebFlux SSE Streaming & Resilient Fallback
+1. [Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
+2. [High-Level Architecture (HLD)](#2-high-level-architecture-hld)
+3. [Component Architecture & Protocol Boundaries](#3-component-architecture--protocol-boundaries)
+4. [Monorepo & Multi-Module Project Structure](#4-monorepo--multi-module-project-structure)
+5. [Git Workflow, Branching & Commit Standards](#5-git-workflow-branching--commit-standards)
+6. [Low-Level Design (LLD) & Technical Specifications](#6-low-level-design-lld--technical-specifications)
+   * [6.1 Protocol Buffers & gRPC Schema](#61-protocol-buffers--grpc-schema)
+   * [6.2 Relational Database Schema (PostgreSQL)](#62-relational-database-schema-postgresql)
+   * [6.3 Redis Key Layout & Atomic Lua Rate Limiter](#63-redis-key-layout--atomic-lua-rate-limiter)
+   * [6.4 Stateless JWT Security Pipeline](#64-stateless-jwt-security-pipeline)
+   * [6.5 REST API, Error Envelopes & Versioning Engine](#65-rest-api-error-envelopes--versioning-engine)
+   * [6.6 Reactive WebFlux SSE Streaming & Resilient Fallback](#66-reactive-webflux-sse-streaming--resilient-fallback)
    * 6.7 GraphQL SDL Schema & DataLoader N+1 Fix
    * 6.8 Cryptographic Webhook Engine with Idempotency
-7. **Granular Collaborative Task Matrix (Micro-Sprints)**
-8. **End-to-End Verification, Curl Commands & Testing**
-9. **Interview Readiness & Defense Guide**
+7. Granular Collaborative Task Matrix (Micro-Sprints)
+8. End-to-End Verification, Curl Commands & Testing
+9. Interview Readiness & Defense Guide
 
 ---
 
@@ -42,13 +42,13 @@ Organizations building AI-powered applications face severe operational vulnerabi
 
 ### 1.2 The Gateway Solution
 
-The LLM API Gateway acts as a unified reverse proxy and intelligent router sitting between client applications and downstream AI providers. It exposes:
+The **LLM API Gateway** acts as a unified reverse proxy and intelligent router sitting between client applications and downstream AI providers. It exposes:
 
-*   **Stateless REST & Non-blocking SSE (Server-Sent Events)** for universal client ingestion.
-*   **Sub-millisecond gRPC / Protobuf communication** for internal model routing and health checks.
-*   **GraphQL with DataLoaders** for client analytics dashboards with zero over-fetching.
-*   **Atomic Redis Token Bucket Rate Limiting** to protect upstream provider quotas.
-*   **HMAC-SHA256 Signed Outbound Webhooks** with exponential backoff retries for billing alerts.
+* **Stateless REST & Non-blocking SSE (Server-Sent Events)** for universal client ingestion.
+* **Sub-millisecond gRPC / Protobuf communication** for internal model routing and health checks.
+* **GraphQL with DataLoaders** for client analytics dashboards with zero over-fetching.
+* **Atomic Redis Token Bucket Rate Limiting** to protect upstream provider quotas.
+* **HMAC-SHA256 Signed Outbound Webhooks** with exponential backoff retries for billing alerts.
 
 ---
 
@@ -56,6 +56,7 @@ The LLM API Gateway acts as a unified reverse proxy and intelligent router sitti
 
 ### 2.1 System Topology Diagram
 
+```text
 ====================================================================================================
                                 EXTERNAL CLIENT LAYER
 Mobile Apps, React/Next.js Single Page Applications, External Backend Services, CLI Tools
@@ -64,57 +65,63 @@ Mobile Apps, React/Next.js Single Page Applications, External Backend Services, 
         | HTTP/1.1 or HTTP/2         | HTTP/1.1 (Accept: text/event-| HTTP POST /graphql
         | JSON: POST /api/v{1,2}/chat| stream): GET /api/v1/chat/stream|
         v                            v                            v
-----------------------------------------------------------------------------------------------------
-                                EDGE SERVICE: API GATEWAY (:8080)
-----------------------------------------------------------------------------------------------------
++--------------------------------------------------------------------------------------------------+
+|                               EDGE SERVICE: API GATEWAY (:8080)                                  |
 |                                                                                                  |
-|  [ 1. Security Filter Chain: JWT Authentication, Signature Check (HS256), SecurityContext    ]   |
-|           |                                                                                      |
-|           v                                                                                      |
-|  [ 2. Rate Limiting Filter: Redis Atomic Lua Token Bucket Check (Tier-based: Free/Pro)       ]   |
-|           |                                                                                      |
-|           v                                                                                      |
-|  [ 3. API Versioning & Deprecation Engine: URI Path (/v1/) vs Header (X-API-VERSION: 2)      ]   |
-|           |                                                                                      |
-|           v                                                                                      |
-|  -----------------------------------           ---------------------------------------------     |
-|  | ChatController (REST & SSE)     |           | DashboardGraphQLController                |     |
-|  | - Reactive Flux Stream          |           | - SDL Queries & Mutations                 |     |
-|  | - Heartbeat Ping Generator      |           | - DataLoader Batch Aggregators            |     |
-|  -----------------------------------           ---------------------------------------------     |
-----------------------------------------------------------------------------------------------------
+|  +--------------------------------------------------------------------------------------------+  |
+|  | 1. Security Filter Chain: JWT Authentication, Signature Check (HS256), SecurityContext     |  |
+|  +--------------------------------------------------------------------------------------------+  |
+|                                                |                                                 |
+|                                                v                                                 |
+|  +--------------------------------------------------------------------------------------------+  |
+|  | 2. Rate Limiting Filter: Redis Atomic Lua Token Bucket Check (Tier-based: Free/Pro)        |  |
+|  +--------------------------------------------------------------------------------------------+  |
+|                                                |                                                 |
+|                                                v                                                 |
+|  +--------------------------------------------------------------------------------------------+  |
+|  | 3. API Versioning & Deprecation Engine: URI Path (/v1/) vs Header (X-API-VERSION: 2)       |  |
+|  +--------------------------------------------------------------------------------------------+  |
+|                        |                                                |                        |
+|                        v                                                v                        |
+|  +------------------------------------------+    +--------------------------------------------+  |
+|  | ChatController (REST & SSE)              |    | DashboardGraphQLController                 |  |
+|  | - Reactive Flux Stream                   |    | - SDL Queries & Mutations                  |  |
+|  | - Heartbeat Ping Generator               |    | - DataLoader Batch Aggregators             |  |
+|  +------------------------------------------+    +--------------------------------------------+  |
++--------------------------------------------------------------------------------------------------+
             |                                                     |
             | gRPC over HTTP/2 (Binary Protobuf)                  | JPA / JDBC Pool
             v (:9090)                                             v
--------------------------------------------      ---------------------------------------------------
-|       SERVICE 2: MODEL SELECTOR SERVICE |      |             POSTGRESQL 16 (:5432)               |
-|                                         |      |                                                 |
-| - ModelRouterServiceImpl (gRPC Server)  |      | - users & api_keys                              |
-| - Provider Health State Registry        |      | - token_usage_records                           |
-| - Dynamic Routing Matrix (Cost vs Latency)|    | - webhook_subscriptions & audit_logs            |
-| - Deadlines & Channel Keep-Alive        |      ---------------------------------------------------
--------------------------------------------                             ^
-            | Returns RouteDecision                                     |
-            v                                                           |
------------------------------------------------------------             |
-|         LLM PROVIDER DISPATCHER & RESILIENT FALLBACK    |             |
-|                                                         |             |
-| Primary: OpenAI GPT-4o --(onErrorResume: 429/5xx)--> Anthropic      |
-|                                              Claude 3.5 |             |
------------------------------------------------------------             |
-            | Asynchronously Records Tokens & Spend                     |
-            v                                                           |
--------------------------------------------      ---------------------------------------------------
-|           REDIS 7 (:6379)               |      |            WEBHOOK DISPATCHER WORKER            |
-|                                         |      |                                                 |
-| - Atomic Token Bucket Counters          |      | - Scheduled / Async Thread Pool                 |
-| - Real-time Monthly Usage Counters      |<-----| Threshold- Exceeds 80% / 100% Budget Notification|
-| - Distributed Idempotency Locks         | Check| - HMAC-SHA256 Payload Signature                 |
--------------------------------------------      | - Exponential Backoff Retries + Jitter          |
-                                                 ---------------------------------------------------
-                                                                        | HTTP POST
-                                                                        v
-                                                            [ Customer Webhook Listener ]
++-------------------------------------------+      +-----------------------------------------------+
+|     SERVICE 2: MODEL SELECTOR SERVICE     |      |             POSTGRESQL 16 (:5432)             |
+|                                           |      |                                               |
+| - ModelRouterServiceImpl (gRPC Server)    |      | - users & api_keys                            |
+| - Provider Health State Registry          |      | - token_usage_records                         |
+| - Dynamic Routing Matrix (Cost vs Latency)|      | - webhook_subscriptions & audit_logs          |
+| - Deadlines & Channel Keep-Alive          |      +-----------------------------------------------+
++-------------------------------------------+                             ^
+            | Returns RouteDecision                                       |
+            v                                                             |
++-----------------------------------------------------------+             |
+|       LLM PROVIDER DISPATCHER & RESILIENT FALLBACK        |             |
+|                                                           |             |
+| Primary: OpenAI GPT-4o --(onErrorResume: 429/5xx)--> Anthropic          |
+|                                                Claude 3.5 |             |
++-----------------------------------------------------------+             |
+            | Asynchronously Records Tokens & Spend                       |
+            v                                                             |
++-------------------------------------------+      +-----------------------------------------------+
+|              REDIS 7 (:6379)              |      |           WEBHOOK DISPATCHER WORKER           |
+|                                           |      |                                               |
+| - Atomic Token Bucket Counters            |      | - Scheduled / Async Thread Pool               |
+| - Real-time Monthly Usage Counters        |<-----| Threshold- Exceeds 80% / 100% Budget Notif.   |
+| - Distributed Idempotency Locks           | Check| - HMAC-SHA256 Payload Signature               |
++-------------------------------------------+      | - Exponential Backoff Retries + Jitter        |
+                                                   +-----------------------------------------------+
+                                                                          | HTTP POST
+                                                                          v
+                                                              [ Customer Webhook Listener ]
+```
 
 ---
 
@@ -124,12 +131,12 @@ Mobile Apps, React/Next.js Single Page Applications, External Backend Services, 
 
 | Boundary | Protocols Used | Rationale |
 | :--- | :--- | :--- |
-| **Client -> Gateway (Ingestion)** | REST (HTTP/1.1, HTTP/2), JSON | Standardized client compatibility. Zero third-party runtime dependencies for consumer apps. |
-| **Client -> Gateway (Streaming)** | Server-Sent Events (SSE), UTF-8 text streams | Long-lived unidirectional stream supported natively by browser `EventSource` and curl without WebSocket upgrade overhead. |
-| **Client -> Gateway (Analytics)** | GraphQL over HTTP POST | Allows developer consoles to query complex hierarchical billing and metric trees without N+1 network requests or over-fetching. |
-| **Gateway -> Model Selector (Internal)** | gRPC over HTTP/2 with Protocol Buffers | Binary serialization (Protobuf) is 6-10x smaller than JSON; eliminates parsing CPU overhead; binary framing multiplexes over a single persistent TCP socket. |
-| **Gateway -> Redis** | RESP3 Binary / Redis Protocol | Sub-millisecond atomic script execution for distributed concurrency control. |
-| **Gateway -> Customer Servers** | Webhook POST with HMAC-SHA256 | Asynchronous event push alerting with cryptographic proof of origin and tamper protection. |
+| **Client → Gateway (Ingestion)** | REST (HTTP/1.1, HTTP/2), JSON | Standardized client compatibility. Zero third-party runtime dependencies for consumer apps. |
+| **Client → Gateway (Streaming)** | Server-Sent Events (SSE), UTF-8 text streams | Long-lived unidirectional stream supported natively by browser `EventSource` and curl without WebSocket upgrade overhead. |
+| **Client → Gateway (Analytics)** | GraphQL over HTTP POST | Allows developer consoles to query complex hierarchical billing and metric trees without N+1 network requests or over-fetching. |
+| **Gateway → Model Selector (Internal)** | gRPC over HTTP/2 with Protocol Buffers | Binary serialization (Protobuf) is 6-10x smaller than JSON; eliminates parsing CPU overhead; binary framing multiplexes over a single persistent TCP socket. |
+| **Gateway → Redis** | RESP3 Binary / Redis Protocol | Sub-millisecond atomic script execution for distributed concurrency control. |
+| **Gateway → Customer Servers** | Webhook POST with HMAC-SHA256 | Asynchronous event push alerting with cryptographic proof of origin and tamper protection. |
 
 ---
 
@@ -137,11 +144,12 @@ Mobile Apps, React/Next.js Single Page Applications, External Backend Services, 
 
 The project is structured as a single Git repository containing decoupled Gradle/Maven modules:
 
-*   `gateway-common` : Shared DTOs, protobuf definitions, and crypto utilities.
-*   `model-router-service` : Standalone gRPC service responsible for provider routing and health.
-*   `api-gateway` : The public edge proxy (REST, SSE, GraphQL, JWT, Redis, Webhooks).
-*   `mock-webhook-receiver` : Standalone test verification harness simulating client webhook endpoints.
+* `gateway-common` : Shared DTOs, protobuf definitions, and crypto utilities.
+* `model-router-service` : Standalone gRPC service responsible for provider routing and health.
+* `api-gateway` : The public edge proxy (REST, SSE, GraphQL, JWT, Redis, Webhooks).
+* `mock-webhook-receiver` : Standalone test verification harness simulating client webhook endpoints.
 
+```text
 llm-api-gateway/
 ├── .gitignore
 ├── README.md
@@ -194,7 +202,7 @@ llm-api-gateway/
 │       │   │   │   ├── SecurityConfig.java
 │       │   │   │   ├── RedisConfig.java
 │       │   │   │   ├── GrpcClientConfig.java
-│       │   │   │   └── GraphQlConfig.java
+│       │   │   │   └── GraphQLConfig.java
 │       │   │   ├── security/
 │       │   │   │   ├── JwtTokenProvider.java
 │       │   │   │   ├── JwtAuthenticationFilter.java
@@ -213,9 +221,9 @@ llm-api-gateway/
 │       │   │   │   ├── LlmOrchestratorService.java
 │       │   │   │   ├── FallbackRoutingEngine.java
 │       │   │   │   ├── TokenAccountingService.java
-│       │   │   │   └── WebhookDispatcherService.java
+│       │   │   │   ├── WebhookDispatcherService.java
 │       │   │   │   └── client/
-│       │   │   │       ├── OpenAIReactiveClient.java
+│       │   │   │       ├── OpenAiReactiveClient.java
 │       │   │   │       └── AnthropicReactiveClient.java
 │       │   │   ├── repository/
 │       │   │   │   ├── UserRepository.java
@@ -252,6 +260,7 @@ llm-api-gateway/
             │   └── WebhookConsumerController.java
             └── resources/
                 └── application.yml
+```
 
 ---
 
@@ -262,6 +271,7 @@ llm-api-gateway/
 1. **Protected Main Branch:** Direct commits to `main` are rejected. All merges require a pull request, green test suite, and peer approval.
 2. **Co-Authorship in Git Commits:** Every commit produced during pair programming must include the co-author trailer to give both engineers Git attribution:
 
+```text
 feat(grpc): define model router protobuf contract and build stubs
 
 - Create model_router.proto with RouteRequest and RouteResponse
@@ -270,32 +280,35 @@ feat(grpc): define model router protobuf contract and build stubs
 
 Co-authored-by: Engineer One <eng1@gateway.io>
 Co-authored-by: Engineer Two <eng2@gateway.io>
+```
 
 ### 5.2 Branching Model
 
+```text
 main (production-ready)
-|
+│
 ├── sprint/01-grpc-contracts (Eng 1 + Eng 2)
 │   ├── feat/proto-definition (Eng 1)
 │   └── feat/grpc-client-stub (Eng 2)
-|
+│
 ├── sprint/02-auth-security
 │   ├── feat/jwt-provider (Eng 1)
 │   └── feat/jwt-filter-chain (Eng 2)
-|
+│
 └── sprint/03-rest-sse-fallback
     ├── feat/rest-versioning (Eng 1)
     └── feat/webflux-sse-stream (Eng 2)
+```
 
 ### 5.3 Commit Message Convention (Conventional Commits)
 
 Format: `<type>(<scope>): <short description>`
 
-*   `feat` : New feature or endpoint.
-*   `fix` : Bug fix in logic or filter.
-*   `test` : Unit, integration, or load test suite.
-*   `refactor` : Structural code cleanup without functional changes.
-*   `perf` : Optimizations (e.g. Lua script tuning, connection pool sizing).
+* `feat` : New feature or endpoint.
+* `fix` : Bug fix in logic or filter.
+* `test` : Unit, integration, or load test suite.
+* `refactor` : Structural code cleanup without functional changes.
+* `perf` : Optimizations (e.g. Lua script tuning, connection pool sizing).
 
 ---
 
@@ -305,6 +318,7 @@ Format: `<type>(<scope>): <short description>`
 
 **File Path:** `gateway-common/src/main/proto/model_router.proto`
 
+```protobuf
 syntax = "proto3";
 
 package com.gateway.router;
@@ -337,9 +351,9 @@ message RouteRequest {
 
 message RouteResponse {
   ProviderType selected_provider = 1;
-  string target_model_id = 2;       // e.g. "gpt-4o-2024-08-06"
+  string target_model_id = 2;         // e.g. "gpt-4o-2024-08-06"
   ProviderType fallback_provider = 3; // e.g. ANTHROPIC
-  string fallback_model_id = 4;     // e.g. "claude-3-5-sonnet-20241022"
+  string fallback_model_id = 4;       // e.g. "claude-3-5-sonnet-20241022"
   int32 max_tokens_limit = 5;
   int32 timeout_millis = 6;
 }
@@ -357,20 +371,24 @@ message HealthCheckResponse {
   ServingStatus status = 1;
   map<string, bool> provider_availability = 2;
 }
+```
 
-**gRPC Channel Configuration Specifications**
+#### gRPC Channel Configuration Specifications
 
-*   **Transport:** Netty Channel with HTTP/2 framing.
-*   **Port:** `9090`.
-*   **Keep-Alive:** `keepAliveTime(30, TimeUnit.SECONDS)`, `keepAliveTimeout(5, TimeUnit.SECONDS)`.
-*   **Deadlines:** Every client stub invocation MUST enforce `.withDeadlineAfter(500, TimeUnit.MILLISECONDS)`.
-*   **Error Propagation:** The server maps internal exceptions to `io.grpc.StatusRuntimeException` with `Status.INVALID_ARGUMENT`, `Status.UNAVAILABLE`, or `Status.DEADLINE_EXCEEDED`.
+* **Transport:** Netty Channel with HTTP/2 framing.
+* **Port:** `9090`.
+* **Keep-Alive:** `keepAliveTime(30, TimeUnit.SECONDS)`, `keepAliveTimeout(5, TimeUnit.SECONDS)`.
+* **Deadlines:** Every client stub invocation MUST enforce `.withDeadlineAfter(500, TimeUnit.MILLISECONDS)`.
+* **Error Propagation:** The server maps internal exceptions to `io.grpc.StatusRuntimeException` with `Status.INVALID_ARGUMENT`, `Status.UNAVAILABLE`, or `Status.DEADLINE_EXCEEDED`.
+
+---
 
 ### 6.2 Relational Database Schema (PostgreSQL)
 
-**Database Name:** `gateway_db`
+**Database Name:** `gateway_db`  
 **File Path:** `docker/postgres/init.sql`
 
+```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. Users Table
@@ -438,10 +456,13 @@ CREATE TABLE webhook_deliveries (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP WITH TIME ZONE
 );
+```
+
+---
 
 ### 6.3 Redis Key Layout & Atomic Lua Rate Limiter
 
-**Key Namespacing Schema**
+#### Key Namespacing Schema
 
 | Key Pattern | Data Type | TTL | Description |
 | :--- | :--- | :--- | :--- |
@@ -449,10 +470,11 @@ CREATE TABLE webhook_deliveries (
 | `usage:{userId}:{YYYY-MM}:spend` | String (Float) | 60 days | Running sum of monthly spend in USD |
 | `idempotency:{key}` | String | 24 hours | Prevents duplicate webhook or payment processing |
 
-**Production Redis Lua Token Bucket Rate Limiter**
+#### Production Redis Lua Token Bucket Rate Limiter
 
 **File Path:** `api-gateway/src/main/resources/lua/token_bucket.lua`
 
+```lua
 -- KEYS[1]: Rate limit key (e.g. ratelimit:usr_123:tokens)
 -- ARGV[1]: Bucket capacity (max burst size, e.g. 10.0)
 -- ARGV[2]: Refill rate per millisecond (e.g. 0.000166 for 10 tokens/min)
@@ -477,6 +499,7 @@ if tokens == nil then
 else
     local delta = math.max(0, now - last_updated)
     tokens = math.min(capacity, tokens + (delta * refill_rate))
+    last_updated = now
 end
 
 if tokens >= requested then
@@ -489,61 +512,69 @@ else
     redis.call("EXPIRE", key, ttl)
     return { 0, math.floor(tokens) } -- 0 = Denied (429)
 end
+```
+
+---
 
 ### 6.4 Stateless JWT Security Pipeline
 
-**Cryptographic Architecture**
+#### Cryptographic Architecture
 
-*   **Algorithm:** HMAC-SHA256 (`HS256`) with a 256-bit cryptographically secure secret (configurable to `RS256` asymmetric keys).
-*   **Access Token TTL:** 15 minutes.
-*   **Refresh Token TTL:** 7 days (persisted with revocation tracking).
-*   **Standard Claims:**
-    *   `sub`: User UUID
-    *   `iss`: `llm-api-gateway`
-    *   `iat`: Timestamp
-    *   `exp`: Timestamp
-    *   `roles`: `["ROLE_USER", "ROLE_ADMIN"]`
-    *   `tier`: `FREE` | `PRO` | `ENTERPRISE`
+* **Algorithm:** HMAC-SHA256 (`HS256`) with a 256-bit cryptographically secure secret (configurable to `RS256` asymmetric keys).
+* **Access Token TTL:** 15 minutes.
+* **Refresh Token TTL:** 7 days (persisted with revocation tracking).
+* **Standard Claims:**
+  * `sub` : User UUID
+  * `iss` : `llm-api-gateway`
+  * `iat` : Timestamp
+  * `exp` : Timestamp
+  * `roles` : `["ROLE_USER", "ROLE_ADMIN"]`
+  * `tier` : `FREE` | `PRO` | `ENTERPRISE`
 
-**Request Filter Execution Flow**
+#### Request Filter Execution Flow
 
-HTTP Request with "Authorization: Bearer eyJhbGci..."
-                  |
-                  v
+```text
+HTTP Request with 'Authorization: Bearer eyJhbGci...'
+                  │
+                  ▼
        JwtAuthenticationFilter (OncePerRequestFilter)
-                  |
-     Does header start with "Bearer "?
-                  ├─ NO ─> Continue filter chain (Anonymous / 401 on protected endpoint)
-                  |
-                  └─ YES ─> Extract token string
-                                 |
-                                 v
+                  │
+     Does header start with 'Bearer '?
+                  ├── NO ──> Continue filter chain (Anonymous / 401 on protected endpoint)
+                  │
+                  └── YES ──> Extract token string
+                                 │
+                                 ▼
                        JwtTokenProvider.validateToken()
                        1. Verify signature with secret key
                        2. Check exp > Instant.now()
-                                 |
+                                 │
                            Valid Token?
-                                 ├─ NO (Expired/Tampered) ─> Throw JwtException
-                                 |                           Return RFC 7807 401 Unauthorized
-                                 |
-                                 └─ YES ─> Extract Claims (userId, roles, tier)
-                                                |
-                                                v
+                                 ├── NO (Expired/Tampered) ──> Throw JwtException
+                                 │                             Return RFC 7807 401 Unauthorized
+                                 │
+                                 └── YES ──> Extract Claims (userId, roles, tier)
+                                                │
+                                                ▼
                                          Construct UserPrincipal
                                          Set SecurityContextHolder:
                                          UsernamePasswordAuthenticationToken
-                                                |
-                                                v
+                                                │
+                                                ▼
                                          Proceed to Rate Limiting Filter
+```
+
+---
 
 ### 6.5 REST API, Error Envelopes & Versioning Engine
 
-**1. Unified Chat Endpoint Specification**
+#### 1. Unified Chat Endpoint Specification
 
 `POST /api/v1/chat/completions`
 
 **Request Payload:**
 
+```json
 {
   "model": "auto-fast",
   "messages": [
@@ -555,9 +586,11 @@ HTTP Request with "Authorization: Bearer eyJhbGci..."
   "temperature": 0.7,
   "max_tokens": 1000
 }
+```
 
 **Success Response (200 OK):**
 
+```json
 {
   "id": "chatcmpl-9b87df34-118c",
   "provider": "ANTHROPIC",
@@ -580,11 +613,13 @@ HTTP Request with "Authorization: Bearer eyJhbGci..."
     "cost_usd": 0.00241
   }
 }
+```
 
-**2. RFC 7807 Problem Details Error Envelope**
+#### 2. RFC 7807 Problem Details Error Envelope
 
 Every failure (400, 401, 403, 429, 500) returns a consistent payload:
 
+```json
 {
   "type": "https://api.gateway.io/errors/rate-limit-exceeded",
   "title": "Too Many Requests",
@@ -593,25 +628,31 @@ Every failure (400, 401, 403, 429, 500) returns a consistent payload:
   "instance": "/api/v1/chat/completions",
   "timestamp": "2026-10-18T10:15:30.124Z"
 }
+```
 
-**3. Versioning & Deprecation Engine**
+#### 3. Versioning & Deprecation Engine
 
-The gateway supports both URI Versioning (`/api/v1/`) and Header Versioning (`X-API-VERSION: 2`). When clients invoke `/api/v1/`, the `DeprecationHeaderFilter` injects IETF standard deprecation headers:
+The gateway supports both **URI Versioning** (`/api/v1/`) and **Header Versioning** (`X-API-VERSION: 2`). When clients invoke `/api/v1/`, the `DeprecationHeaderFilter` injects IETF standard deprecation headers:
 
+```http
 HTTP/1.1 200 OK
 Deprecation: @1767225599
 Sunset: Thu, 31 Dec 2026 23:59:59 GMT
 Link: </api/v2/chat/completions>; rel="successor-version"
+```
+
+---
 
 ### 6.6 Reactive WebFlux SSE Streaming & Resilient Fallback
 
-**Endpoint Specification**
+#### Endpoint Specification
 
-`GET /api/v1/chat/stream?prompt={prompt}&model={model}`
+`GET /api/v1/chat/stream?prompt={prompt}&model={model}`  
 **Accept Header:** `text/event-stream`
 
-**Reactive Fallback Chain Implementation Logic**
+#### Reactive Fallback Chain Implementation Logic
 
+```java
 public Flux<ServerSentEvent<String>> streamWithFallback(String prompt, RouteResponse route) {
     Flux<String> primaryStream = openAiClient.stream(prompt, route.getTargetModelId())
         .timeout(Duration.ofMillis(route.getTimeoutMillis()))
@@ -626,4 +667,7 @@ public Flux<ServerSentEvent<String>> streamWithFallback(String prompt, RouteResp
             .event("token")
             .data(token)
             .build());
+            
+    return tokenFlux;
 }
+```
