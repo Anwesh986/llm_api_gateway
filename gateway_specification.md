@@ -671,3 +671,272 @@ public Flux<ServerSentEvent<String>> streamWithFallback(String prompt, RouteResp
     return tokenFlux;
 }
 ```
+
+### 6.7 GraphQL SDL Schema & DataLoader N+1 Fix
+
+**File Path:** `api-gateway/src/main/resources/graphql/schema.graphqls`
+
+```graphql
+type Query {
+  me: UserProfile!
+  systemHealth: SystemHealth!
+  teamMembersUsage: [UserProfile!]!
+}
+
+type Mutation {
+  generateApiKey(name: String!): ApiKeyCreatedResponse!
+  revokeApiKey(keyId: ID!): Boolean!
+  updateWebhook(url: String!): WebhookSubscription!
+}
+
+type UserProfile {
+  id: ID!
+  email: String!
+  tier: String!
+  monthlyBudgetUsd: Float!
+  currentSpendUsd: Float!
+  usageSummary: UsageSummary!
+  activeKeys: [ApiKeyInfo!]!
+}
+
+type UsageSummary {
+  totalTokensConsumed: Int!
+  providerBreakdown: [ProviderMetric!]!
+}
+
+type ProviderMetric {
+  provider: String!
+  tokenCount: Int!
+  spendUsd: Float!
+  percentageOfTotal: Float!
+}
+
+type ApiKeyInfo {
+  id: ID!
+  name: String!
+  keyPrefix: String!
+  createdAt: String!
+  lastUsedAt: String
+}
+
+type ApiKeyCreatedResponse {
+  apiKeyInfo: ApiKeyInfo!
+  rawSecretKey: String! # Returned only once upon creation
+}
+
+type SystemHealth {
+  gatewayStatus: String!
+  modelRouterStatus: String!
+}
+```
+
+#### Resolving the N+1 Query Problem with DataLoader
+
+When a client requests `teamMembersUsage { id, email, usageSummary { totalTokensConsumed } }`:
+
+* **Naive Implementation:** 1 query to fetch 50 users + 50 individual queries to fetch usage per user ($N + 1$).
+* **DataLoader Solution:** Resolvers request keys via `DataLoader<UUID, UsageSummary>`. DataLoader batches all keys during an execution tick and issues **1 single query**:
+
+```sql
+SELECT user_id, SUM(total_tokens) as total_tokens, SUM(estimated_cost_usd) as total_cost
+FROM usage_records
+WHERE user_id IN (?, ?, ?, ... ?)
+GROUP BY user_id;
+```
+
+---
+
+### 6.8 Cryptographic Webhook Engine with Idempotency
+
+#### 1. Outgoing Webhook Event Structure
+
+```json
+{
+  "event_id": "evt_91b7d8c4-a521-4f12-87ce-00129bc8",
+  "event_type": "budget.threshold_reached",
+  "timestamp": 1792348500,
+  "data": {
+    "user_id": "usr_9a4f21",
+    "budget_limit_usd": 50.00,
+    "current_spend_usd": 50.12,
+    "percentage": 100.24
+  }
+}
+```
+
+#### 2. HMAC-SHA256 Signature Generation
+
+Every outbound webhook includes cryptographic proof in HTTP headers:
+
+* `X-Gateway-Signature` : Hex-encoded HMAC-SHA256 signature calculated as `HMAC_SHA256(secret_key, timestamp + "." + payload_json)`.
+* `X-Gateway-Timestamp` : Epoch timestamp to prevent replay attacks.
+* `X-Idempotency-Key` : Unique UUID per event.
+
+#### 3. Exponential Backoff Retry Mathematical Model
+
+Failed deliveries (receiver returns 5xx or connection times out) are retried according to:
+
+$$T_{\text{wait}} = \min(T_{\text{max}}, T_{\text{base}} \times 2^{\text{attempt}}) \pm \text{Jitter}$$
+
+* $T_{\text{base}} = 1\text{ second}$
+* **Maximum Retries:** 5 attempts
+* **Jitter:** Random value between $-200\text{ms}$ and $+200\text{ms}$ to prevent the thundering herd problem.
+
+---
+
+## 7. Granular Collaborative Task Matrix (Micro-Sprints)
+
+Every milestone is broken into synchronized micro-tasks where both engineers write code across every single layer.
+
+### 🏁 Milestone 0: Environment & Multi-Module Skeleton
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **0.1** | Configure root `build.gradle` and `settings.gradle` declaring submodules: `gateway-common`, `model-router-service`, `api-gateway`, `mock-webhook-receiver`. | Create `docker-compose.yml` with PostgreSQL 16 (port 5432) and Redis 7 (port 6379) with healthchecks. | Run `docker compose up -d` and `./gradlew build` together; verify clean compile. |
+| **0.2** | Write SQL initialization script `docker/postgres/init.sql` creating schemas and tables. | Write Spring `application.yml` files for database HikariCP and Lettuce Redis connections. | Boot `api-gateway` and verify PostgreSQL tables and Redis ping respond. |
+
+### 🏁 Milestone 1: Protobuf & gRPC Model Selector
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **1.1** | Write Protobuf contract `model_router.proto` defining `RouteRequest`, `RouteResponse`, and `ModelRouterService`. | Configure `com.google.protobuf` Gradle plugin in `gateway-common` for Java code generation. | Run `./gradlew generateProto` together. Inspect generated builder classes in `build/generated/source/proto`. |
+| **1.2** | Implement `ModelRouterServiceImpl` extending generated base class with model selection logic. | Write `ProviderHealthRegistry` simulating provider uptime, latency metrics, and failure states. | Start standalone gRPC server on port `9090`. Test using `grpcurl` or CLI harness. |
+| **1.3** | Write `ModelRouterServiceTest` using gRPC in-process server and `StreamRecorder` assertions. | Implement `GrpcClientConfig` and `ModelRouterClient` in `api-gateway` with 500ms deadline interceptor. | Send 100 client requests from `api-gateway` to `model-router-service`; verify zero channel leaks. |
+
+### 🏁 Milestone 2: Stateless JWT Authentication & Security
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **2.1** | Implement `JwtTokenProvider` using `io.jsonwebtoken` (claims: `sub`, `roles`, `tier`, `exp`, `iat`). | Write unit tests for `JwtTokenProvider`: expired token rejection, tampered signature detection. | Pair-debug raw JWT token: inspect Base64URL header, payload, and cryptographic signature. |
+| **2.2** | Implement `AuthController` with endpoints `POST /api/v1/auth/register` and `POST /api/v1/auth/login`. | Implement `User` entity, `UserRepository`, and `BCryptPasswordEncoder` credential hashing. | Register user via curl, log in, and acquire a valid Bearer token. |
+| **2.3** | Configure Spring Security 6 `SecurityFilterChain` with endpoint authorization rules. | Implement `JwtAuthenticationFilter` (`OncePerRequestFilter`) validating token and populating `SecurityContext`. | Test with no token (401), invalid token (401), valid token (200). |
+
+### 🏁 Milestone 3: REST API Design & Versioning Strategy
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **3.1** | Build `ChatRequest` and `ChatResponse` DTOs with validation (`@NotBlank`, `@Min`, `@Max`). | Implement `@RestControllerAdvice` mapping exceptions to RFC 7807 `ProblemDetailDTO`. | Post invalid JSON; assert formatted RFC 7807 error envelope with 400 status. |
+| **3.2** | Implement URI Path Versioning controller: `POST /api/v1/chat/completions`. | Implement Header Versioning routing based on `X-API-VERSION: 2`. | Test both V1 and V2 endpoints with identical payloads; observe version differential. |
+| **3.3** | Write automated integration tests for version routing and content negotiation. | Implement `DeprecationHeaderFilter` attaching `Deprecation`, `Sunset`, and `Link` headers to V1. | Verify deprecation headers appear in response headers when calling `/v1/`. |
+
+### 🏁 Milestone 4: Reactive SSE Streaming & Resilient Fallback
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **4.1** | Create `OpenAiReactiveClient` returning `Flux<String>` with configurable simulated 429 errors. | Create `AnthropicReactiveClient` returning reliable fallback `Flux<String>`. | Verify token emission rates (50ms intervals) using Project Reactor's `StepVerifier`. |
+| **4.2** | Implement `FallbackRoutingEngine` using `.onErrorResume()` to bridge primary and secondary providers. | Write unit tests with `StepVerifier` asserting zero stream interruptions when primary fails midway. | Run fallback test; observe log output switching from OpenAI to Anthropic in real-time. |
+| **4.3** | Implement SSE Controller `GET /api/v1/chat/stream` returning `Flux<ServerSentEvent<String>>`. | Implement periodic heartbeat generator emitting `: keep-alive` comments every 15s. | Test with `curl -N http://localhost:8080/api/v1/chat/stream`; watch words stream in terminal. |
+
+### 🏁 Milestone 5: GraphQL Analytics Dashboard & DataLoader
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **5.1** | Author `schema.graphqls` defining `Query`, `Mutation`, `UserProfile`, and `UsageSummary`. | Configure Spring for GraphQL starter and implement root `@QueryMapping` for `me`. | Open GraphiQL UI at `http://localhost:8080/graphiql`; run query and inspect JSON shape. |
+| **5.2** | Write naive `@SchemaMapping` causing N+1 database queries when fetching team members. | Implement `BatchLoaderRegistry` and `DataLoader` batching queries into `WHERE user_id IN (...)`. | Inspect SQL log output: observe query count drop from $N + 1$ down to 2. |
+| **5.3** | Add GraphQL mutation `generateApiKey` creating hashed keys stored in PostgreSQL. | Implement query depth validator interceptor rejecting queries nested beyond 5 levels. | Fire recursive query; assert GraphQL engine rejects it before executing resolvers. |
+
+### 🏁 Milestone 6: Webhooks & Distributed Rate Limiting
+
+| Task # | Engineer 1 Task | Engineer 2 Task | Collaborative Handshake |
+| :--- | :--- | :--- | :--- |
+| **6.1** | Author atomic Redis Lua script `token_bucket.lua` with capacity and refill logic. | Build Spring `RateLimitingFilter` extracting user tier from JWT and invoking Lua script via Lettuce. | Run concurrent load test (15 parallel requests); assert exactly 10 succeed and 5 return 429. |
+| **6.2** | Implement `HmacSigner` generating HMAC-SHA256 signatures with secret key. | Build `mock-webhook-receiver` application validating `X-Gateway-Signature` and timestamp. | Send webhook payload; verify mock receiver validates signature and logs receipt. |
+| **6.3** | Build `WebhookDispatcherService` detecting budget breaches and queuing deliveries. | Implement exponential backoff retry loop with random jitter and idempotency key headers. | Shut down mock receiver; trigger webhook; watch retries back off; bring receiver up; assert delivery. |
+
+---
+
+## 8. End-to-End Verification, Curl Commands & Testing
+
+### 8.1 Verification Script Matrix
+
+#### 1. Register & Obtain JWT
+
+```bash
+# Register User
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"developer@enterprise.io","password":"SecurePassword123!"}'
+
+# Login & Extract Token
+JWT_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"developer@enterprise.io","password":"SecurePassword123!"}' | jq -r .token)
+
+echo "JWT: $JWT_TOKEN"
+```
+
+#### 2. Test Rate Limiter (Fire 15 Requests in Parallel)
+
+```bash
+for i in {1..15}; do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/api/v1/chat/completions \
+    -H "Authorization: Bearer $JWT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"auto-fast","messages":[{"role":"user","content":"ping"}]}' &
+done
+wait
+# Expected output: 10 responses with 200, 5 responses with 429
+```
+
+#### 3. Test Real-time SSE Token Streaming
+
+```bash
+curl -N -X GET "http://localhost:8080/api/v1/chat/stream?prompt=Explain+distributed+transactions&model=auto-fast" \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Accept: text/event-stream"
+```
+
+#### 4. Test GraphQL Query with Zero Over-fetching
+
+```bash
+curl -X POST http://localhost:8080/graphql \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query { me { email tier monthlyBudgetUsd currentSpendUsd usageSummary { totalTokensConsumed } } }"
+  }' | jq .
+```
+
+#### 5. Verify Webhook Signature via HMAC-SHA256
+
+```bash
+# In mock-webhook-receiver logs:
+# Assert: "200 OK - Signature Verified for event evt_... IdempotencyKey=..."
+```
+
+---
+
+## 9. Interview Readiness & Defense Guide
+
+When defending this architecture in Senior / SDE2 backend interviews, both engineers must be prepared to answer:
+
+#### Q1: What is the architectural difference between Authentication and Authorization in your gateway?
+
+* **Authentication (AuthN):** Proving identity. Handled by `JwtAuthenticationFilter` by cryptographically validating the token's digital signature and expiration.
+* **Authorization (AuthZ):** Determining permissions. Handled at the endpoint/method level using claims extracted from the token (`role: ROLE_ADMIN`, `tier: ENTERPRISE`).
+
+#### Q2: How does JWT validation work without a database lookup on every incoming request?
+
+* The token is a self-contained digital credential signed using a shared secret (`HS256`) or private key (`RS256`).
+* The gateway verifies the signature mathematically using CPU cycles in memory.
+* Because claims (`userId`, `tier`, `roles`) reside inside the decrypted payload, the gateway establishes context with zero database I/O.
+
+#### Q3: Why choose gRPC over REST for internal communication between the Gateway and the Model Router?
+
+* **Binary Serialization:** Protocol Buffers serialize into compact binary tags, eliminating ASCII parsing overhead.
+* **HTTP/2 Multiplexing:** Thousands of concurrent RPC calls travel over a single long-lived TCP connection, avoiding head-of-line blocking and repeated TLS handshakes.
+* **Type Safety & Contract Sharing:** The `.proto` file is a strict contract shared across services, eliminating schema drift.
+
+#### Q4: Why is a naive Redis increment (`INCR`) insufficient for distributed rate limiting, and how does Lua solve it?
+
+* A naive check-then-set requires multiple round-trips (`GET` current tokens $\rightarrow$ calculate in Java $\rightarrow$ `SET` new tokens). Under high concurrency, race conditions occur between the read and write steps.
+* Redis executes Lua scripts atomically in a single thread, ensuring that token calculation, deduction, and expiration occur in one uninterruptible step.
+
+#### Q5: What makes an API endpoint idempotent and why is it critical for webhooks?
+
+* An endpoint is idempotent if executing it multiple times produces the identical side effect as executing it once.
+* Network glitches or timeouts can cause the gateway to retry webhook deliveries. Without an `X-Idempotency-Key` and receiver-side deduplication, the customer's system might charge a credit card or increment an account balance multiple times.
+
+---
+
+*Specification authored for pair programming teams. Follow the micro-sprints in order; do not skip collaborative handshakes.*
