@@ -1,0 +1,6 @@
+rootProject.name = 'llm-api-gateway'
+
+include 'gateway-common'
+include 'model-router-service'
+include 'api-gateway'
+include 'mock-webhook-receiver'

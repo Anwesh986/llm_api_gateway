@@ -1,0 +1,30 @@
+plugins {
+    id 'java-library'
+    id 'com.google.protobuf'
+}
+
+dependencies {
+    // gRPC & Protobuf
+    implementation 'io.grpc:grpc-protobuf:1.60.0'
+    implementation 'io.grpc:grpc-stub:1.60.0'
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // For javax.annotation
+    
+    // JWT & Crypto (for HmacSigner)
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.1"
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.60.0'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
