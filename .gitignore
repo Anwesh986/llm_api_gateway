@@ -3,3 +3,10 @@
 
 # Ignore Gradle build output directories
 **/build/
+
+#ignore secrets and sensitive information
+.env
+
+data/
+redis_data/
+postgres_data/
