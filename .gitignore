@@ -9,4 +9,4 @@
 
 data/
 redis_data/
-postgres_data/
+postgres_data/ 
