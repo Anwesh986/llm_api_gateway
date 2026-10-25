@@ -1,0 +1,33 @@
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/llm_gateway_db}
+    username: ${POSTGRES_USER:gateway_admin}
+    password: ${POSTGRES_PASSWORD:secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: GatewayHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: 2s
+      timeout: 2s
