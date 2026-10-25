@@ -1,0 +1,15 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    implementation project(':gateway-common')
+    
+    implementation 'org.springframework.boot:spring-boot-starter'
+    // gRPC Server Support
+    implementation 'net.devh:grpc-server-spring-boot-starter:3.0.0.RELEASE'
+    
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
