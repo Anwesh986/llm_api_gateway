@@ -1,27 +1,28 @@
 plugins {
     id 'java-library'
-    id 'com.google.protobuf'
+    alias(libs.plugins.protobuf)
 }
 
 dependencies {
-    // gRPC & Protobuf
-    implementation 'io.grpc:grpc-protobuf:1.60.0'
-    implementation 'io.grpc:grpc-stub:1.60.0'
-    compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // For javax.annotation
-    
-    // JWT & Crypto (for HmacSigner)
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+    implementation libs.protobuf.java
+    implementation libs.grpc.protobuf
+    implementation libs.grpc.stub
+    compileOnly libs.annotations.api
+
+    implementation libs.jjwt.api
 }
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.1"
+        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.version.get()}"
     }
+
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.60.0'
+            artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.version.get()}"
         }
     }
+
     generateProtoTasks {
         all()*.plugins {
             grpc {}
