@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: model-router-service
+
+grpc:
+  server:
+    port: 9090
