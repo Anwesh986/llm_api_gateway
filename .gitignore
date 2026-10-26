@@ -5,7 +5,7 @@
 **/build/
 
 #ignore secrets and sensitive information
-.env
+# .env
 
 data/
 redis_data/
