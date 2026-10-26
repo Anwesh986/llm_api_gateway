@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package com.gateway.router;
+
+option java_multiple_files = true;
+option java_package = "com.gateway.router.grpc";
+option java_outer_classname = "ModelRouterProto";
+
+service ModelRouterService {
+  rpc SelectRoute(RouteRequest) returns (RouteResponse);
+  rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+enum ProviderType {
+  PROVIDER_UNSPECIFIED = 0;
+  OPENAI = 1;
+  ANTHROPIC = 2;
+  GEMINI = 3;
+}
+
+message RouteRequest {
+  string user_id = 1;
+  string requested_model = 2;
+  int32 prompt_tokens_estimate = 3;
+  string user_tier = 4;
+}
+
+message RouteResponse {
+  ProviderType selected_provider = 1;
+  string target_model_id = 2;
+  ProviderType fallback_provider = 3;
+  string fallback_model_id = 4;
+  int32 max_tokens_limit = 5;
+  int32 timeout_millis = 6;
+}
+
+message HealthCheckRequest {
+  string client_id = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+
+  ServingStatus status = 1;
+  map<string, bool> provider_availability = 2;
+}

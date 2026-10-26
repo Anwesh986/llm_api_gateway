@@ -4,6 +4,9 @@
 # Ignore Gradle build output directories
 **/build/
 
+**/bin/
+*.log
+
 #ignore secrets and sensitive information
 # .env
 
