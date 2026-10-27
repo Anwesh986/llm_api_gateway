@@ -31,3 +31,11 @@ spring:
       password: ${REDIS_PASSWORD:}
       connect-timeout: 2s
       timeout: 2s
+
+
+# This default assumes you run api-gateway and model-router-service on the same machine. 
+# If both run in Docker Compose, use the router's Compose service name as the hostname instead of localhost
+grpc:
+  model-router:
+    host: localhost
+    port: 9090
