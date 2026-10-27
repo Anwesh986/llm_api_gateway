@@ -39,3 +39,9 @@ grpc:
   model-router:
     host: localhost
     port: 9090
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-ttl: 15m
+    issuer: llm-api-gateway
