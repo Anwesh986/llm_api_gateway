@@ -17,6 +17,7 @@ dependencies {
 
     implementation libs.grpc.client.spring.boot
 
+    implementation libs.jjwt.api
     runtimeOnly libs.jjwt.impl
     runtimeOnly libs.jjwt.jackson
 
