@@ -8,45 +8,59 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
+import java.util.Base64;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JwtTokenProviderTest {
 
+    private static final byte[] SECRET_BYTES =
+            "test-secret-key-for-hs256-32-bytes".getBytes();
     private static final String SECRET =
-            "test-secret-key-for-hs256-must-be-32-bytes";
+            Base64.getEncoder().encodeToString(SECRET_BYTES);
+    private static final String ISSUER = "test-issuer";
+    private static final UUID USER_ID =
+            UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     private JwtTokenProvider jwtTokenProvider;
     private SecretKey secretKey;
 
     @BeforeEach
     void setUp() {
-        secretKey = Keys.hmacShaKeyFor(
-                SECRET.getBytes(StandardCharsets.UTF_8)
-        );
+        secretKey = Keys.hmacShaKeyFor(SECRET_BYTES);
 
-        jwtTokenProvider = new JwtTokenProvider(SECRET);
+        jwtTokenProvider = new JwtTokenProvider(
+                SECRET,
+                Duration.ofMinutes(15),
+                ISSUER
+        );
     }
 
     // Test 1: Verify Engineer 1 generates all required JWT claims.
     @Test
     void generateToken_shouldContainAllRequiredClaims() {
         String token = jwtTokenProvider.generateToken(
-                "user-123",
+                USER_ID,
                 List.of("ROLE_USER", "ROLE_ADMIN"),
                 "PRO"
         );
 
         Claims claims = Jwts.parser()
                 .verifyWith(secretKey)
+                .requireIssuer(ISSUER)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
 
-        assertEquals("user-123", claims.getSubject());
+        assertEquals(USER_ID.toString(), claims.getSubject());
+        assertEquals(ISSUER, claims.getIssuer());
         assertEquals(
                 List.of("ROLE_USER", "ROLE_ADMIN"),
                 claims.get("roles", List.class)
@@ -66,15 +80,17 @@ class JwtTokenProviderTest {
     @Test
     void validateToken_shouldAcceptValidToken() {
         String token = jwtTokenProvider.generateToken(
-                "user-123",
+                USER_ID,
                 List.of("ROLE_USER"),
                 "FREE"
         );
 
-        assertTrue(
-                jwtTokenProvider.validateToken(token),
-                "A valid JWT must be accepted"
-        );
+        Claims claims = jwtTokenProvider.validateToken(token);
+
+        assertEquals(USER_ID, jwtTokenProvider.getUserId(token));
+        assertEquals(List.of("ROLE_USER"), jwtTokenProvider.getRoles(token));
+        assertEquals("FREE", jwtTokenProvider.getTier(token));
+        assertEquals(USER_ID.toString(), claims.getSubject());
     }
 
     // Test 3: Verify expired tokens are rejected.
@@ -83,7 +99,8 @@ class JwtTokenProviderTest {
         long now = System.currentTimeMillis();
 
         String expiredToken = Jwts.builder()
-                .subject("user-123")
+                .subject(USER_ID.toString())
+                .issuer(ISSUER)
                 .claim("roles", List.of("ROLE_USER"))
                 .claim("tier", "FREE")
                 .issuedAt(new Date(now - 60_000))
@@ -91,8 +108,9 @@ class JwtTokenProviderTest {
                 .signWith(secretKey)
                 .compact();
 
-        assertFalse(
-                jwtTokenProvider.validateToken(expiredToken),
+        assertThrows(
+                io.jsonwebtoken.ExpiredJwtException.class,
+                () -> jwtTokenProvider.validateToken(expiredToken),
                 "An expired JWT must be rejected"
         );
     }
@@ -101,7 +119,7 @@ class JwtTokenProviderTest {
     @Test
     void validateToken_shouldRejectTamperedSignature() {
         String validToken = jwtTokenProvider.generateToken(
-                "user-123",
+                USER_ID,
                 List.of("ROLE_USER"),
                 "FREE"
         );
@@ -117,8 +135,9 @@ class JwtTokenProviderTest {
 
         String tamperedToken = String.join(".", parts);
 
-        assertFalse(
-                jwtTokenProvider.validateToken(tamperedToken),
+        assertThrows(
+                io.jsonwebtoken.JwtException.class,
+                () -> jwtTokenProvider.validateToken(tamperedToken),
                 "A JWT with a tampered signature must be rejected"
         );
     }
