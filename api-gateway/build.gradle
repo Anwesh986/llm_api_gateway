@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation project(':gateway-common')
 
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
@@ -19,6 +20,7 @@ dependencies {
 
     implementation libs.grpc.client.spring.boot
 
+    implementation libs.jjwt.api
     runtimeOnly libs.jjwt.impl
     runtimeOnly libs.jjwt.jackson
 
