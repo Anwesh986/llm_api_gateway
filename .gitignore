@@ -13,3 +13,7 @@
 data/
 redis_data/
 postgres_data/ 
+
+# Copilot instructions and skills
+.github/copilot-instructions.md
+.github/skills/
