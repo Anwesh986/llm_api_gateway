@@ -26,10 +26,26 @@ public class ChatController {
     
     @PostMapping(
         path = "/completions",
-        consumes = MediaType.APPLICATION_JSON_VALUE
+        consumes = MediaType.APPLICATION_JSON_VALUE,
+        headers = "!X-API-VERSION"
     )
     public ResponseEntity<ChatResponse> completions(
         @Valid @RequestBody ChatRequest request){
+        return createCompletionResponse(request);
+    }
+
+    @PostMapping(
+        path = "/completions",
+        consumes = MediaType.APPLICATION_JSON_VALUE,
+        headers = "X-API-VERSION=2"
+    )
+    public ResponseEntity<ChatResponse> completionsV2(
+        @Valid @RequestBody ChatRequest request){
+        return createCompletionResponse(request);
+    }
+
+    private ResponseEntity<ChatResponse> createCompletionResponse(
+        ChatRequest request) {
         int promptTokens = estimatePromptTokens(request);
         int completionTokens = 3;
 
