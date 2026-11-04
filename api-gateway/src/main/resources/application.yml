@@ -49,3 +49,7 @@ security:
     secret: ${JWT_SECRET}
     access-token-ttl: 15m
     issuer: llm-api-gateway
+
+providers:
+  openai:
+    simulate-rate-limit: false
