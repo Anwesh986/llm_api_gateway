@@ -1,5 +1,7 @@
 package com.gateway.api.controller;
 
+import java.time.Duration;
+
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,10 +27,19 @@ public class ChatStreamController {
         path = "/stream",
         produces = MediaType.TEXT_EVENT_STREAM_VALUE
     )public Flux<ServerSentEvent<String>> streamCompletion(ChatRequest request){
-        return fallbackRoutingEngine.streamCompletion(request)
-            .map(chunk -> ServerSentEvent.<String>builder()
-            .event("message")
-            .data(chunk)
-            .build());
+        Flux<ServerSentEvent<String>> tokenEvents =
+                fallbackRoutingEngine.streamCompletion(request)
+                        .map(chunk -> ServerSentEvent.<String>builder()
+                                .event("message")
+                                .data(chunk)
+                                .build());
+
+        Flux<ServerSentEvent<String>> heartbeatEvents =
+                Flux.interval(Duration.ofSeconds(15))
+                        .map(sequence -> ServerSentEvent.<String>builder()
+                                .comment("keep-alive")
+                                .build());
+
+        return Flux.merge(tokenEvents, heartbeatEvents);
     }    
 }

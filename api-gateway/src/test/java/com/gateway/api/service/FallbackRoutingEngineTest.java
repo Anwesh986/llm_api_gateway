@@ -55,5 +55,26 @@ public class FallbackRoutingEngineTest {
                 .expectNext("fallback-2")
                 .verifyComplete();
     }
+    @Test
+        void switchesToFallbackWhenPrimaryFailsMidStream() {
+        ReactiveProviderClient primary = request ->
+                Flux.concat(
+                        Flux.just("primary-1", "primary-2"),
+                        Flux.error(new RuntimeException("Primary failed mid-stream"))
+                );
+
+        ReactiveProviderClient fallback = request ->
+                Flux.just("fallback-1", "fallback-2");
+
+        FallbackRoutingEngine engine =
+                new FallbackRoutingEngine(primary, fallback);
+
+        StepVerifier.create(engine.streamCompletion(request))
+                .expectNext("primary-1")
+                .expectNext("primary-2")
+                .expectNext("fallback-1")
+                .expectNext("fallback-2")
+                .verifyComplete();
+        }
     
 }
