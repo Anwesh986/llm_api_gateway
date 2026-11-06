@@ -1,6 +1,7 @@
 package com.gateway.api.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import com.gateway.api.client.ReactiveProviderClient;
 import com.gateway.api.dto.ChatRequest;
@@ -13,8 +14,8 @@ public class FallbackRoutingEngine {
     private final ReactiveProviderClient fallbackProvider;
 
     public FallbackRoutingEngine(
-        ReactiveProviderClient primaryProvider,
-        ReactiveProviderClient fallbackProvider
+        @Qualifier("primaryProvider") ReactiveProviderClient primaryProvider,
+        @Qualifier("fallbackProvider") ReactiveProviderClient fallbackProvider
     ){
         this.primaryProvider = primaryProvider;
         this.fallbackProvider = fallbackProvider;

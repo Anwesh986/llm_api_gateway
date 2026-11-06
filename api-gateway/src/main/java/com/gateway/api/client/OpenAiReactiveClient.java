@@ -12,7 +12,7 @@ import com.gateway.api.dto.ChatRequest;
 import org.springframework.beans.factory.annotation.Value;
 import reactor.core.publisher.Flux;
 
-@Component 
+@Component("primaryProvider")
 public class OpenAiReactiveClient implements ReactiveProviderClient {
     private static final Duration CHUNK_DELAY = Duration.ofMillis(50);
 
